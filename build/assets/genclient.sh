@@ -38,7 +38,10 @@ cd $EASY_RSA
 # Generate certificates
 if  [[ -z $CERT_PASS ]]; then
     echo 'Without password...'
-    ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CERT_NAME" nopass subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
+    ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CERT_NAME" nopass
+   
+    # this is not passed on the command line, it's set form variables
+    # subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
 else
     echo 'With password...'
     # See https://stackoverflow.com/questions/4294689/how-to-generate-an-openssl-key-using-a-passphrase-from-the-command-line
@@ -64,7 +67,13 @@ tail -1 $EASY_RSA/pki/index.txt
 CA="$(cat $EASY_RSA/pki/ca.crt )"
 CERT="$(awk '/-----BEGIN CERTIFICATE-----/{flag=1;next}/-----END CERTIFICATE-----/{flag=0}flag' ./pki/issued/${CERT_NAME}.crt | tr -d '\0')"
 KEY="$(cat $EASY_RSA/pki/private/${CERT_NAME}.key)"
-TLS_AUTH="$(cat $EASY_RSA/pki/ta.key)"
+TLS_AUTH=""
+if [ -s $EASY_RSA/pki/ta.key ]; then
+	TLS_AUTH="
+<tls-auth>
+$(cat $EASY_RSA/pki/ta.key)
+</tls-auth>"
+fi
 
 echo 'Fixing permissions for pki/issued...'
 chmod +r $EASY_RSA/pki/issued
@@ -79,10 +88,7 @@ $CERT
 </cert>
 <key>
 $KEY
-</key>
-<tls-auth>
-$TLS_AUTH
-</tls-auth>
+</key>$TLS_AUTH
 " > "$OVPN_FILE_PATH"
 
 echo -e "OpenVPN Client configuration successfully generated!\nCheckout openvpn-server/clients/$CERT_NAME.ovpn"
